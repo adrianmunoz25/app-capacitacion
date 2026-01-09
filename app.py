@@ -1,10 +1,11 @@
 import streamlit as st
 import google.generativeai as genai
 import gspread
-from google.oauth2.service_account import Credentials # <--- Librería Moderna
+from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
+# 1. Nombre EXACTO de tu archivo en Google Drive
 NOMBRE_SHEET = "Evaluaciones de capacitación" 
 
 # --- INTERFAZ VISUAL ---
@@ -21,24 +22,31 @@ st.markdown("""
 st.title("🎓 Evaluación de Proyecto")
 st.write("¡Hola! Ayúdanos a evaluar la experiencia de creación de este curso.")
 
-# --- SECCIÓN 1: LOS 3 PILARES ---
+# --- GUÍA VISUAL DE LA ESCALA ---
+st.info("ℹ️ **Guía de calificación:** \n1️⃣ = **Muy Malo / Deficiente** 😡  \n5️⃣ = **Excelente / Sobresaliente** 🤩")
+
+# --- SECCIÓN 1: EVALUACIÓN (Preguntas Claras) ---
 st.markdown("---")
-st.subheader("1. Experiencia de Servicio")
+st.subheader("1. Tu Experiencia")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.write("**📡 Comunicación y Cercanía**")
-    st.caption("¿Hubo errores? ¿Sentiste apoyo y claridad en las dudas?")
-    pilar_comunicacion = st.slider("Comunicación", 1, 5, 3, label_visibility="collapsed", key="com")
+    st.markdown("**📡 Comunicación y Apoyo**")
+    st.caption("¿Resolvimos tus dudas con claridad y cercanía?")
+    pilar_comunicacion = st.slider("Comunicación", 1, 5, 3, format="%d ⭐", label_visibility="collapsed", key="com")
+    st.markdown(f"<div style='text-align: center; color: grey;'>Tu calif: {pilar_comunicacion}</div>", unsafe_allow_html=True)
 
 with col2:
-    st.write("**⚡ Gestión y Rapidez**")
-    st.caption("Visibilidad del estatus, seguimiento y tiempos de respuesta.")
-    pilar_gestion = st.slider("Gestión", 1, 5, 3, label_visibility="collapsed", key="ges")
+    st.markdown("**⚡ Gestión y Tiempos**")
+    st.caption("¿Fuimos rápidos y dimos visibilidad del estatus?")
+    pilar_gestion = st.slider("Gestión", 1, 5, 3, format="%d ⭐", label_visibility="collapsed", key="ges")
+    st.markdown(f"<div style='text-align: center; color: grey;'>Tu calif: {pilar_gestion}</div>", unsafe_allow_html=True)
 
-st.write("**🛠️ Proceso y Calidad**")
-st.caption("Claridad del proceso de trabajo y calidad del material final.")
-pilar_calidad = st.slider("Calidad", 1, 5, 3, label_visibility="collapsed", key="cal")
+st.markdown("<br>", unsafe_allow_html=True) # Espacio
+st.markdown("**🛠️ Calidad del Proceso y Entregable**")
+st.caption("¿El proceso fue ordenado y el curso final quedó excelente?")
+pilar_calidad = st.slider("Calidad", 1, 5, 3, format="%d ⭐", label_visibility="collapsed", key="cal")
+st.markdown(f"<div style='text-align: center; color: grey;'>Tu calif: {pilar_calidad}</div>", unsafe_allow_html=True)
 
 promedio = (pilar_comunicacion + pilar_gestion + pilar_calidad) / 3
 
@@ -48,15 +56,15 @@ st.subheader("2. Comentarios Finales")
 
 pregunta_dinamica = ""
 if promedio <= 3:
-    st.warning("Notamos que hubo fricción en el proceso.")
-    pregunta_dinamica = "¿Qué obstáculo específico debemos eliminar?"
+    st.warning("Lamentamos que la experiencia no fuera ideal.")
+    pregunta_dinamica = "Para subir al 5: ¿Qué falló específicamente (tiempos, trato, calidad)?"
 elif promedio < 5:
-    st.info("Gracias por tu evaluación.")
-    pregunta_dinamica = "¿Qué detalle nos faltó para el 10?"
+    st.info("¡Gracias! Casi logramos la excelencia.")
+    pregunta_dinamica = "¿Qué pequeño detalle nos faltó para obtener un 5 perfecto?"
 else:
-    st.success("¡Nos alegra haber superado expectativas!")
+    st.success("¡Wow! Gracias por la confianza.")
     st.balloons()
-    pregunta_dinamica = "¿Qué fortaleza deberíamos mantener?"
+    pregunta_dinamica = "¿Qué fue lo que más te gustó para seguir haciéndolo?"
 
 comentario = st.text_area(pregunta_dinamica)
 
@@ -64,13 +72,13 @@ comentario = st.text_area(pregunta_dinamica)
 if st.button("Enviar Evaluación 🚀", type="primary"):
     with st.spinner("Guardando respuestas..."):
         
-        # 1. ANÁLISIS DE IA (INTENTO)
-        analisis_ia = "Sin análisis (Error IA)"
+        # 1. ANÁLISIS DE IA
+        analisis_ia = "Sin análisis"
         try:
             api_key = st.secrets["GEMINI_API_KEY"]
             genai.configure(api_key=api_key)
             
-            # Selector automático de modelo
+            # Buscamos modelo disponible
             modelo_a_usar = "models/gemini-1.5-flash"
             try:
                 for m in genai.list_models():
@@ -80,34 +88,29 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
             except: pass
 
             model = genai.GenerativeModel(modelo_a_usar)
-            prompt = f"Resume este feedback en 5 palabras. Comentario: {comentario}"
+            prompt = f"Resume en 5 palabras este feedback de capacitación: {comentario}"
             
             if comentario:
                 response = model.generate_content(prompt)
                 analisis_ia = response.text
-            else:
-                analisis_ia = "Sin comentario escrito"
                 
         except Exception as e:
-            # Si falla la IA, no detenemos la app, solo avisamos
-            print(f"Error IA: {e}")
-            analisis_ia = "Error conectando con IA"
+            print(f"IA no disponible: {e}")
 
-        # 2. GUARDAR EN GOOGLE SHEETS (CONEXIÓN MODERNA)
+        # 2. GUARDAR EN GOOGLE SHEETS
         try:
-            # Definimos el alcance correcto
             scopes = [
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive"
             ]
             
-            # Usamos la librería nueva 'google-auth'
             credentials = Credentials.from_service_account_info(
                 st.secrets["gcp_service_account"],
                 scopes=scopes
             )
             
             client = gspread.authorize(credentials)
+            # AQUI ESTA LA CORRECCION DEL NOMBRE:
             sheet = client.open(NOMBRE_SHEET).sheet1
             
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -117,10 +120,10 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
             ])
             
             st.toast("¡Guardado exitosamente!", icon="✅")
-            st.success("Gracias, tu opinión ha sido registrada.")
+            st.success("¡Gracias! Tu opinión ya está en nuestro sistema.")
             
         except Exception as e:
-            st.error("⚠️ Error al guardar en Excel.")
-            st.write("Detalle del error técnico:")
-            st.code(e)
-
+            st.error("⚠️ Error al guardar.")
+            st.write("Verifica que el nombre del archivo en Google Drive sea EXACTAMENTE:")
+            st.code("Evaluaciones de capacitación")
+            st.write("Error técnico:", e)
