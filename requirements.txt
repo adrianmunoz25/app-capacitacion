@@ -1,5 +1,5 @@
 streamlit
 google-generativeai
-gspread
+gspread==6.0.0
 google-auth
 pandas
