@@ -1,7 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials # <--- Librería Moderna
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
@@ -49,62 +49,65 @@ st.subheader("2. Comentarios Finales")
 pregunta_dinamica = ""
 if promedio <= 3:
     st.warning("Notamos que hubo fricción en el proceso.")
-    pregunta_dinamica = "Para mejorar: ¿Qué obstáculo específico (tiempos, entendimiento, herramientas) debemos eliminar?"
+    pregunta_dinamica = "¿Qué obstáculo específico debemos eliminar?"
 elif promedio < 5:
     st.info("Gracias por tu evaluación.")
-    pregunta_dinamica = "¿Qué detalle nos faltó para que la experiencia fuera perfecta?"
+    pregunta_dinamica = "¿Qué detalle nos faltó para el 10?"
 else:
     st.success("¡Nos alegra haber superado expectativas!")
     st.balloons()
-    pregunta_dinamica = "¿Qué práctica o fortaleza del equipo deberíamos mantener siempre?"
+    pregunta_dinamica = "¿Qué fortaleza deberíamos mantener?"
 
 comentario = st.text_area(pregunta_dinamica)
 
 # --- BOTÓN DE ENVÍO ---
 if st.button("Enviar Evaluación 🚀", type="primary"):
-    with st.spinner("Procesando tu feedback..."):
+    with st.spinner("Guardando respuestas..."):
+        
+        # 1. ANÁLISIS DE IA (INTENTO)
+        analisis_ia = "Sin análisis (Error IA)"
         try:
-            # 1. CONEXIÓN A LA NUBE
             api_key = st.secrets["GEMINI_API_KEY"]
-            creds_dict = st.secrets["gcp_service_account"]
-            
-            # 2. AUTO-SELECCIÓN DE MODELO (Solución al Error 404)
             genai.configure(api_key=api_key)
             
-            # Buscamos qué modelos tienes disponibles
-            modelo_a_usar = "models/gemini-1.5-flash" # Opción por defecto
+            # Selector automático de modelo
+            modelo_a_usar = "models/gemini-1.5-flash"
             try:
                 for m in genai.list_models():
-                    if 'generateContent' in m.supported_generation_methods:
-                        if 'gemini' in m.name:
-                            modelo_a_usar = m.name
-                            break # Usamos el primero que encontremos
-            except:
-                pass # Si falla el listado, usamos el default
+                    if 'generateContent' in m.supported_generation_methods and 'gemini' in m.name:
+                        modelo_a_usar = m.name
+                        break
+            except: pass
 
-            # st.write(f"Debug: Usando modelo {modelo_a_usar}") # Descomenta si quieres ver cuál eligió
             model = genai.GenerativeModel(modelo_a_usar)
+            prompt = f"Resume este feedback en 5 palabras. Comentario: {comentario}"
             
-            prompt_analisis = f"""
-            Actúa como experto en RRHH. Analiza este feedback:
-            Puntajes (1-5): Com={pilar_comunicacion}, Ges={pilar_gestion}, Cal={pilar_calidad}.
-            Comentario: "{comentario}"
-            Tarea:
-            1. Sentimiento (Positivo/Neutro/Negativo).
-            2. Categoría (Atención, Claridad, Rapidez, Proceso o Fortaleza).
-            3. Resumen (Max 5 palabras).
-            Responde: Sentimiento | Categoría | Resumen
-            """
-            
-            analisis_ia = "Sin análisis"
             if comentario:
-                response = model.generate_content(prompt_analisis)
+                response = model.generate_content(prompt)
                 analisis_ia = response.text
+            else:
+                analisis_ia = "Sin comentario escrito"
+                
+        except Exception as e:
+            # Si falla la IA, no detenemos la app, solo avisamos
+            print(f"Error IA: {e}")
+            analisis_ia = "Error conectando con IA"
+
+        # 2. GUARDAR EN GOOGLE SHEETS (CONEXIÓN MODERNA)
+        try:
+            # Definimos el alcance correcto
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
             
-            # 3. GUARDAR EN GOOGLE SHEETS
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
+            # Usamos la librería nueva 'google-auth'
+            credentials = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=scopes
+            )
+            
+            client = gspread.authorize(credentials)
             sheet = client.open(NOMBRE_SHEET).sheet1
             
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -113,9 +116,10 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
                 round(promedio, 2), comentario, analisis_ia
             ])
             
-            st.toast("¡Evaluación enviada con éxito!", icon="✅")
+            st.toast("¡Guardado exitosamente!", icon="✅")
+            st.success("Gracias, tu opinión ha sido registrada.")
             
         except Exception as e:
-            st.error("Hubo un error técnico.")
-            # Esto imprimirá el error exacto en pantalla para que sepamos qué pasó
+            st.error("⚠️ Error al guardar en Excel.")
+            st.write("Detalle del error técnico:")
             st.code(e)
