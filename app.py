@@ -5,7 +5,7 @@ from google.oauth2.service_account import Credentials # <--- Librería Moderna
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
-NOMBRE_SHEET = "Resultados Capacitacion" 
+NOMBRE_SHEET = "Evaluaciones de capacitación" 
 
 # --- INTERFAZ VISUAL ---
 st.set_page_config(page_title="Evaluación Capacitación", page_icon="🎓", layout="centered")
@@ -123,3 +123,4 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
             st.error("⚠️ Error al guardar en Excel.")
             st.write("Detalle del error técnico:")
             st.code(e)
+
