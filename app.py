@@ -77,7 +77,7 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
                 
                 # 2. ANÁLISIS CON GEMINI (IA)
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-1.5-flash-001')
                 
                 prompt_analisis = f"""
                 Actúa como experto en RRHH. Analiza este feedback de un cliente interno sobre un proyecto de capacitación.
@@ -121,4 +121,5 @@ if st.button("Enviar Evaluación 🚀", type="primary"):
             except Exception as e:
                 st.error("Error de conexión. Verifica los permisos de la hoja.")
                 st.write(e)
+
 
